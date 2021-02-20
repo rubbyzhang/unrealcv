@@ -32,6 +32,8 @@ struct FCaptureParamer
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
 	int32   ImageHeight;
 
+	//TODO 目前按绝对路径方式使用, 如 'H:/ScreenShotResult/' ， 每次执行会删除之前的数据，重新创建目录， 
+    //建议使用相对工程的路径(参考FPaths类), 保证linux下的兼容
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
 	FString  TargetDirectory;
 
@@ -89,15 +91,21 @@ private:
 	};
 
 	FCaptureParamer CaptureParamter;
+	FString TargetDirectory;
 
 	FCaptureOrientation  OldCameraOrientation;
 
 	TArray<FCaptureOrientation> CaptureOrientations;
 	int32 CurCaptureIndex; 
-	void ScreenShotDelay();
-	void SetTransfromDelay();
 
+	void StartCapture();
+	void ScreenShotDelay();
+	void SetCameraOrientationDelay();
+	void StopCapture();
+
+	void SetCaptureParamater(const FCaptureParamer& InCaptureParamter);
 	void GenerateOrientations(const FCaptureParamer& InCaptureParamters, const TArray<FVector>& InPoints , TArray<FCaptureOrientation>& Orientations);
-	bool SetCameraOrientation(const FCaptureOrientation& Orientation);
-	void ScreenShot(const FString& SaveFilePath);
+	bool SetCameraOrientation(const FCaptureOrientation& InOrientation);
+
+	bool ScreenShot(const FCaptureOrientation& InOrientation);
 };

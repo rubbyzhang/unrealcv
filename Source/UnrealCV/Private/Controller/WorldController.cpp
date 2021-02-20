@@ -52,7 +52,6 @@ void AUnrealcvWorldController::InitWorld()
 		UE_LOG(LogUnrealCV, Warning, TEXT("The tcp server is not running"));
 	}
 
-
 	ObjectAnnotator.AnnotateWorld(GetWorld());
 
 	FEngineShowFlags ShowFlags = GetWorld()->GetGameViewport()->EngineShowFlags;
@@ -96,19 +95,8 @@ void AUnrealcvWorldController::Tick(float DeltaTime)
 
 }
 
-
-//float	 FovX;
-//float	 FovY;
-//uint32   PitchNum;
-//uint32   YawNum;
-//uint32   ImageWidth;
-//uint32   ImageHeight;
-//FString  FolderPath;
-
-
 bool AUnrealcvWorldController::Capture(const FCaptureParamer& InCaptureParamter, const TArray<FVector>& InPoints)
 {
-	UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::Capture Start"));
 
 	if (InPoints.Num() == 0)
 	{
@@ -124,50 +112,72 @@ bool AUnrealcvWorldController::Capture(const FCaptureParamer& InCaptureParamter,
 	}
 
 	CaptureParamter = InCaptureParamter;
-
-	// Set Parameters(Use FCaptureParamer)
-	// Fov
-	//ImageWidth
-	//ImageHeight
-	//OuptputPath
-	//
+	SetCaptureParamater(InCaptureParamter);
 
 	GenerateOrientations(InCaptureParamter, InPoints, CaptureOrientations);
 
-	OldCameraOrientation.Location = Pawn->GetActorLocation();
-	OldCameraOrientation.Rotator = Pawn->GetActorRotation();
-
-	CurCaptureIndex = 0;
-	SetTransfromDelay();
-
-	UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::Capture End"));
+	StartCapture();
 
 	return false;
 }
 
-void AUnrealcvWorldController::SetTransfromDelay()
+void AUnrealcvWorldController::SetCaptureParamater(const FCaptureParamer& InCaptureParamter)
 {
-	UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetTransfromDelay, Index: %d"), CurCaptureIndex);
+	// Create Directory 
+	if (FPlatformFileManager::Get().GetPlatformFile().DirectoryExists(*InCaptureParamter.TargetDirectory))
+	{
+		FPlatformFileManager::Get().Get().GetPlatformFile().DeleteDirectoryRecursively(*InCaptureParamter.TargetDirectory);
+	}
+	FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*CaptureParamter.TargetDirectory);
+
+	// Fov
+	// ImageWidth
+	// ImageHeight
+}
+
+void AUnrealcvWorldController::StartCapture()
+{
+	UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::StartCapture"));
+	APawn* Pawn = FUnrealcvServer::Get().GetPawn();
+	OldCameraOrientation.Location = Pawn->GetActorLocation();
+	OldCameraOrientation.Rotator = Pawn->GetActorRotation();
+
+	CurCaptureIndex = 0;
+	SetCameraOrientationDelay();
+}
+
+void AUnrealcvWorldController::SetCameraOrientationDelay()
+{
+	UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::SetTransfromDelay, Index: %d"), CurCaptureIndex);
 
 	if (CurCaptureIndex < CaptureOrientations.Num())
 	{
-		SetCameraOrientation(CaptureOrientations[CurCaptureIndex]);
+		if (!SetCameraOrientation(CaptureOrientations[CurCaptureIndex]))
+		{
+			StopCapture();
+		}
 		GetWorldTimerManager().SetTimerForNextTick(this, &AUnrealcvWorldController::ScreenShotDelay);
 	}
 	else
 	{
-		SetCameraOrientation(OldCameraOrientation);
-
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetTransfromDelay End"));
+		StopCapture();
 	}
 }
 
 void AUnrealcvWorldController::ScreenShotDelay()
 {
-	FString FilePath = CaptureParamter.TargetDirectory + FString::FromInt(CaptureOrientations[CurCaptureIndex].PointId) + "-" + FString::FromInt(CaptureOrientations[CurCaptureIndex].InterId) + ".png";
-	ScreenShot(FilePath);
+	//Continue Even if have wrong
+	ScreenShot(CaptureOrientations[CurCaptureIndex]);
 	CurCaptureIndex++;
-	GetWorldTimerManager().SetTimerForNextTick(this, &AUnrealcvWorldController::SetTransfromDelay);
+	GetWorldTimerManager().SetTimerForNextTick(this, &AUnrealcvWorldController::SetCameraOrientationDelay);
+}
+
+void AUnrealcvWorldController::StopCapture()
+{
+	UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::StopCapture"));
+
+	//Restore Position
+	SetCameraOrientation(OldCameraOrientation);
 }
 
 void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCaptureParamters, const TArray<FVector>& InPoints, TArray<FCaptureOrientation>& Orientations)
@@ -206,26 +216,36 @@ void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCap
 
 bool  AUnrealcvWorldController::SetCameraOrientation(const FCaptureOrientation& Orientation)
 {
-	// Set Transform
 	APawn* Pawn = FUnrealcvServer::Get().GetPawn();
-	if (!IsValid(Pawn))
+	UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::SetCameraOrientation : Location - %s , Rotator - %s"), *Orientation.Location.ToCompactString(), *Orientation.Rotator.ToCompactString());
+
+	bool IsSucess = Pawn->SetActorLocation(Orientation.Location, false, NULL, ETeleportType::TeleportPhysics);
+	if (!IsSucess)
 	{
+		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : SetActorLocation Method execute Error."));
 		return false;
 	}
 
-	UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::CameraShot : Location - %s , Rotator - %s"), *Orientation.Location.ToCompactString(), *Orientation.Rotator.ToCompactString());
-	Pawn->SetActorLocation(Orientation.Location, false, NULL, ETeleportType::TeleportPhysics);
-	Pawn->SetActorRotation(Orientation.Rotator, ETeleportType::TeleportPhysics);
+	IsSucess = Pawn->SetActorRotation(Orientation.Rotator, ETeleportType::TeleportPhysics);
+	if (!IsSucess)
+	{
+		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : SetActorRotation Method execute Error."));
+		return false;
+	}
 
 	return true;
 }
 
-//TODO How to use HighResShot
-void AUnrealcvWorldController::ScreenShot(const FString& SaveFilePath)
+bool  AUnrealcvWorldController::ScreenShot(const FCaptureOrientation& InOrientation)
 {
+	//Save Path
+	FString SaveFilePath = CaptureParamter.TargetDirectory + "ScreenShot_"  + FString::FromInt(InOrientation.PointId) + "_" + FString::FromInt(InOrientation.InterId) + ".png";
+
+	//Shot.  
 	FString Cmd = "vget /screenshot " + SaveFilePath;
 	UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::ScreenShot:  ScreenShot Command is %s"), *Cmd);
 	FExecStatus ExecStatus1 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd);
 	UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus1.GetMessage());
+	return true;
 }
 
