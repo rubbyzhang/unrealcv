@@ -209,7 +209,7 @@ void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCap
 			for (int32 YawIndex = 0; YawIndex < YawNum; ++YawIndex)
 			{
 				float CurYawAngle = FMath::Min<float>(YawIndex * InCaptureParamters.YawAngleGap, 360.0f);
-				UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::Capture : Location - %s , CurPitctAngle - %f , CurYawAngle - %f "), *InPoints[PointIndex].ToCompactString(), CurPitctAngle, CurYawAngle);
+				UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::Capture : Location - %s , CurPitctAngle - %f , CurYawAngle - %f "), *InPoints[PointIndex].ToCompactString(), CurPitctAngle, CurYawAngle);
 
 				//TODO Roll Angle = 0
 				FRotator Rotator = FRotator(CurPitctAngle, CurYawAngle, 0);
@@ -245,24 +245,6 @@ bool  AUnrealcvWorldController::SetCameraOrientation(const FCaptureOrientation& 
 	}
 	Controller->ClientSetRotation(Orientation.Rotator); // Teleport action
 
-	//////IsSucess = Pawn->SetActorRotation(Orientation.Rotator, ETeleportType::TeleportPhysics);
-	//////if (!IsSucess)
-	//////{
-	//////	UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : SetActorRotation Method execute Error."));
-	//////	return false;
-	//////}
-
-	//FString CameraID = "0";
-	//// "vset /camera/[uint]/location [float] [float] [float]"
-	//FString Cmd1 = "vset /camera/" + CameraID + "/location " + FString::SanitizeFloat(Orientation.Location.X) + " " + FString::SanitizeFloat(Orientation.Location.Y) + " " + FString::SanitizeFloat(Orientation.Location.Z);
-	//FExecStatus ExecStatus1 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd1);
-	//UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus1.GetMessage());
-
-	//// "vset /camera/[uint]/rotation [float] [float] [float]"
-	//FString Cmd2 = "vset /camera/" + CameraID + "/rotation " + FString::SanitizeFloat(Orientation.Rotator.Pitch) + " " + FString::SanitizeFloat(Orientation.Rotator.Yaw) + " " + FString::SanitizeFloat(Orientation.Rotator.Roll);
-	//FExecStatus ExecStatus2 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd2);
-	//UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus2.GetMessage());
-
 	return true;
 }
 
@@ -271,11 +253,20 @@ bool  AUnrealcvWorldController::ScreenShot(const FCaptureOrientation& InOrientat
 	//Save Path
 	FString SaveFilePath = CaptureParamter.TargetDirectory + "ScreenShot_" + FString::FromInt(InOrientation.PointId) + "_" + FString::FromInt(InOrientation.InterId) + "_" + FString::FromInt(InOrientation.Rotator.Pitch) + "_" + FString::FromInt(InOrientation.Rotator.Yaw)  + ".png";
 
-	//Shot.  
-	FString Cmd = "vget /screenshot " + SaveFilePath;
-	UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::ScreenShot:  ScreenShot Command is %s"), *Cmd);
+	//-------------------------------------- ReadPixel  Development版本下失败
+	//FString Cmd = "vget /screenshot " + SaveFilePath;
+	//UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::ScreenShot:  ScreenShot Command is %s"), *Cmd);
+	//FExecStatus ExecStatus1 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd);
+	//UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus1.GetMessage());
+
+	// ------------------------------------- HighResShot 指令 Development可用，Shipping下不可用
+	FString Cmd = "vrun HighResShot " + FString::FromInt(CaptureParamter.ImageWidth) + "x" + FString::FromInt(CaptureParamter.ImageHeight)  + " filename=" + SaveFilePath;
+	UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::HighResShot:  HighResShot Command is %s"), *Cmd);
 	FExecStatus ExecStatus1 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd);
 	UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus1.GetMessage());
+
 	return true;
 }
+
+
 
