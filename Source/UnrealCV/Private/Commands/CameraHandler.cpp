@@ -603,7 +603,7 @@ void FCameraHandler::RegisterCommands()
 
 	CommandDispatcher->BindCommand(
 		"vget /camera/[uint]/size",
-		FDispatcherDelegate::CreateRaw(this, &FCameraHandler::SetSize),
+		FDispatcherDelegate::CreateRaw(this, &FCameraHandler::GetSize),
 		"Get Camera Film Size"
 	);
 

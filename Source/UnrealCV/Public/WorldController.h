@@ -15,16 +15,23 @@ struct FCaptureParamer
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	float	 FovX;
+	float	 Fov;
 
+	// 水平方向采集间隔, 默认0-360
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	float	 FovY;
+	float   YawAngleGap;
 
+	// 前后方向最大摇摆角度
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	int32   YawNum;
+	float     MaxPitchAngle;
 
+	// 前后方向最小摇摆角度
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	int32   PitchNum;
+	float     MinPitchAngle;
+
+	// 前后方向采集角度间隔
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
+	float   PitchGap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
 	int32   ImageWidth;
@@ -38,10 +45,11 @@ struct FCaptureParamer
 	FString  TargetDirectory;
 
 	FCaptureParamer()
-		: FovX(60.0f)
-		, FovY(60.0f)
-		, PitchNum(5)
-		, YawNum(12)
+		: Fov(90.0f)
+		, PitchGap(12.0f)
+		, MaxPitchAngle(36)
+		, MinPitchAngle(-36)
+		, YawAngleGap(60.0f)
 		, ImageWidth(1920)
 		, ImageHeight(1080)
 		, TargetDirectory("/Output")
@@ -102,6 +110,8 @@ private:
 	void ScreenShotDelay();
 	void SetCameraOrientationDelay();
 	void StopCapture();
+
+	FTimerHandle InHandle;
 
 	void SetCaptureParamater(const FCaptureParamer& InCaptureParamter);
 	void GenerateOrientations(const FCaptureParamer& InCaptureParamters, const TArray<FVector>& InPoints , TArray<FCaptureOrientation>& Orientations);

@@ -131,6 +131,19 @@ void AUnrealcvWorldController::SetCaptureParamater(const FCaptureParamer& InCapt
 	FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*CaptureParamter.TargetDirectory);
 
 	// Fov
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
+	if (!IsValid(PlayerController))
+	{
+		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCaptureParamater : The APlayerController of the Pawn is invalid."));
+		return;
+	}
+
+	APlayerCameraManager* PlayerCamManager = PlayerController->PlayerCameraManager;
+	if (PlayerCamManager)
+	{
+		PlayerCamManager->SetFOV(InCaptureParamter.Fov);
+	}
+
 	// ImageWidth
 	// ImageHeight
 }
@@ -156,7 +169,7 @@ void AUnrealcvWorldController::SetCameraOrientationDelay()
 		{
 			StopCapture();
 		}
-		GetWorldTimerManager().SetTimerForNextTick(this, &AUnrealcvWorldController::ScreenShotDelay);
+		GetWorldTimerManager().SetTimer(InHandle, this, &AUnrealcvWorldController::ScreenShotDelay, 0.05f, false);
 	}
 	else
 	{
@@ -166,6 +179,7 @@ void AUnrealcvWorldController::SetCameraOrientationDelay()
 
 void AUnrealcvWorldController::ScreenShotDelay()
 {
+	GetWorldTimerManager().ClearTimer(InHandle);
 	//Continue Even if have wrong
 	ScreenShot(CaptureOrientations[CurCaptureIndex]);
 	CurCaptureIndex++;
@@ -184,18 +198,18 @@ void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCap
 {
 	Orientations.Empty();
 
-	float YawAngleGap = 360.0f / (float)InCaptureParamters.YawNum;
-	float PitchAngleGap = 360.0f / (float)InCaptureParamters.PitchNum;
+	int32 YawNum = FMath::CeilToInt(360.0f / InCaptureParamters.YawAngleGap);  //[)
+	int32 PitchNum = FMath::CeilToInt((InCaptureParamters.MaxPitchAngle - InCaptureParamters.MinPitchAngle) / InCaptureParamters.PitchGap) + 1;  // []
 
 	for (int32 PointIndex = 0; PointIndex < InPoints.Num(); ++PointIndex)
 	{
-		for (int32 PitchIndex = 0; PitchIndex < InCaptureParamters.PitchNum; ++PitchIndex)
+		for (int32 PitchIndex = 0; PitchIndex < PitchNum; PitchIndex++)
 		{
-			float CurPitctAngle = PitchIndex * PitchAngleGap;
-
-			for (int32 YawIndex = 0; YawIndex < InCaptureParamters.YawNum; ++YawIndex)
+			float CurPitctAngle = FMath::Min<float>(InCaptureParamters.MinPitchAngle + PitchIndex * InCaptureParamters.PitchGap, InCaptureParamters.MaxPitchAngle);
+			for (int32 YawIndex = 0; YawIndex < YawNum; ++YawIndex)
 			{
-				float CurYawAngle = YawIndex * YawAngleGap;
+				float CurYawAngle = FMath::Min<float>(YawIndex * InCaptureParamters.YawAngleGap, 360.0f);
+				UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::Capture : Location - %s , CurPitctAngle - %f , CurYawAngle - %f "), *InPoints[PointIndex].ToCompactString(), CurPitctAngle, CurYawAngle);
 
 				//TODO Roll Angle = 0
 				FRotator Rotator = FRotator(CurPitctAngle, CurYawAngle, 0);
@@ -204,10 +218,7 @@ void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCap
 				Orientation.Rotator = Rotator;
 				Orientation.Location = InPoints[PointIndex];
 				Orientation.PointId = PointIndex;
-				Orientation.InterId = PitchIndex * InCaptureParamters.YawNum + YawIndex;
-
-				UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::Capture : Location - %s , CurPitctAngle - %f , CurYawAngle - %f "), *InPoints[PointIndex].ToCompactString(), CurPitctAngle, CurYawAngle);
-
+				Orientation.InterId = PitchIndex * YawNum + YawIndex;
 				Orientations.Add(Orientation);
 			}
 		}
@@ -226,12 +237,31 @@ bool  AUnrealcvWorldController::SetCameraOrientation(const FCaptureOrientation& 
 		return false;
 	}
 
-	IsSucess = Pawn->SetActorRotation(Orientation.Rotator, ETeleportType::TeleportPhysics);
-	if (!IsSucess)
+	AController* Controller = Pawn->GetController();
+	if (!IsValid(Controller))
 	{
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : SetActorRotation Method execute Error."));
+		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : The Controller of the Pawn is invalid."));
 		return false;
 	}
+	Controller->ClientSetRotation(Orientation.Rotator); // Teleport action
+
+	//////IsSucess = Pawn->SetActorRotation(Orientation.Rotator, ETeleportType::TeleportPhysics);
+	//////if (!IsSucess)
+	//////{
+	//////	UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : SetActorRotation Method execute Error."));
+	//////	return false;
+	//////}
+
+	//FString CameraID = "0";
+	//// "vset /camera/[uint]/location [float] [float] [float]"
+	//FString Cmd1 = "vset /camera/" + CameraID + "/location " + FString::SanitizeFloat(Orientation.Location.X) + " " + FString::SanitizeFloat(Orientation.Location.Y) + " " + FString::SanitizeFloat(Orientation.Location.Z);
+	//FExecStatus ExecStatus1 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd1);
+	//UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus1.GetMessage());
+
+	//// "vset /camera/[uint]/rotation [float] [float] [float]"
+	//FString Cmd2 = "vset /camera/" + CameraID + "/rotation " + FString::SanitizeFloat(Orientation.Rotator.Pitch) + " " + FString::SanitizeFloat(Orientation.Rotator.Yaw) + " " + FString::SanitizeFloat(Orientation.Rotator.Roll);
+	//FExecStatus ExecStatus2 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd2);
+	//UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus2.GetMessage());
 
 	return true;
 }
@@ -239,7 +269,7 @@ bool  AUnrealcvWorldController::SetCameraOrientation(const FCaptureOrientation& 
 bool  AUnrealcvWorldController::ScreenShot(const FCaptureOrientation& InOrientation)
 {
 	//Save Path
-	FString SaveFilePath = CaptureParamter.TargetDirectory + "ScreenShot_"  + FString::FromInt(InOrientation.PointId) + "_" + FString::FromInt(InOrientation.InterId) + ".png";
+	FString SaveFilePath = CaptureParamter.TargetDirectory + "ScreenShot_" + FString::FromInt(InOrientation.PointId) + "_" + FString::FromInt(InOrientation.InterId) + "_" + FString::FromInt(InOrientation.Rotator.Pitch) + "_" + FString::FromInt(InOrientation.Rotator.Yaw)  + ".png";
 
 	//Shot.  
 	FString Cmd = "vget /screenshot " + SaveFilePath;
