@@ -14,8 +14,8 @@ struct FCaptureParamer
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	float	 Fov;
+		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
+		float	 Fov;
 
 	// 水平方向采集间隔, 默认0-360
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
@@ -23,26 +23,26 @@ struct FCaptureParamer
 
 	// 前后方向最大摇摆角度
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	float     MaxPitchAngle;
+		float     MaxPitchAngle;
 
 	// 前后方向最小摇摆角度
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	float     MinPitchAngle;
+		float     MinPitchAngle;
 
 	// 前后方向采集角度间隔
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	float   PitchGap;
+		float   PitchGap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	int32   ImageWidth;
+		int32   ImageWidth;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	int32   ImageHeight;
+		int32   ImageHeight;
 
 	//TODO 目前按绝对路径方式使用, 如 'H:/ScreenShotResult/' ， 每次执行会删除之前的数据，重新创建目录， 
-    //建议使用相对工程的路径(参考FPaths类), 保证linux下的兼容
+	//建议使用相对工程的路径(参考FPaths类), 保证linux下的兼容
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CaptureParamers")
-	FString  TargetDirectory;
+		FString  TargetDirectory;
 
 	FCaptureParamer()
 		: Fov(90.0f)
@@ -85,8 +85,20 @@ public:
 	void Tick(float DeltaTime);
 
 	//----------------------------------------------------------------------------
-	UFUNCTION(BlueprintCallable, Category = "UnrealcvWorldController")
+	UFUNCTION(BlueprintCallable, Category = "CaptureScreen")
 	bool Capture(const FCaptureParamer& InCaptureParamter, const TArray<FVector>& InPoints);
+
+	UFUNCTION(BlueprintCallable, Category = "CaptureScreen")
+	FORCEINLINE  float GetProgress() const
+	{
+		return Progress;
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "CaptureScreen")
+	FORCEINLINE  bool IsCaptureRunning() const
+	{
+		return IsInCapure;
+	}
 
 private:
 
@@ -104,18 +116,19 @@ private:
 	FCaptureOrientation  OldCameraOrientation;
 
 	TArray<FCaptureOrientation> CaptureOrientations;
-	int32 CurCaptureIndex; 
+	int32 CurCaptureIndex;
+
+	FTimerHandle InHandle;
+	float Progress;
+	bool  IsInCapure;
 
 	void StartCapture();
 	void ScreenShotDelay();
 	void SetCameraOrientationDelay();
 	void StopCapture();
 
-	FTimerHandle InHandle;
-
 	void SetCaptureParamater(const FCaptureParamer& InCaptureParamter);
-	void GenerateOrientations(const FCaptureParamer& InCaptureParamters, const TArray<FVector>& InPoints , TArray<FCaptureOrientation>& Orientations);
+	void GenerateOrientations(const FCaptureParamer& InCaptureParamters, const TArray<FVector>& InPoints, TArray<FCaptureOrientation>& Orientations);
 	bool SetCameraOrientation(const FCaptureOrientation& InOrientation);
-
 	bool ScreenShot(const FCaptureOrientation& InOrientation);
 };

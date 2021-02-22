@@ -14,6 +14,10 @@
 
 AUnrealcvWorldController::AUnrealcvWorldController(const FObjectInitializer& ObjectInitializer)
 {
+	Progress = 0;
+	IsInCapure = false;
+	CurCaptureIndex = 0;
+
 	PlayerViewMode = CreateDefaultSubobject<UPlayerViewMode>(TEXT("PlayerViewMode"));
 }
 
@@ -97,20 +101,28 @@ void AUnrealcvWorldController::Tick(float DeltaTime)
 
 bool AUnrealcvWorldController::Capture(const FCaptureParamer& InCaptureParamter, const TArray<FVector>& InPoints)
 {
-
 	if (InPoints.Num() == 0)
 	{
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::Capture : Capture Point List is empty"));
+		UE_LOG(LogUnrealCV, Error, TEXT("UnrealcvWorldController::Capture : Capture Point List is empty"));
 		return false;
 	}
 
 	APawn* Pawn = FUnrealcvServer::Get().GetPawn();
 	if (!IsValid(Pawn))
 	{
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::Capture : The Pawn of the scene is invalid."));
+		UE_LOG(LogUnrealCV, Error, TEXT("UnrealcvWorldController::Capture : The Pawn of the scene is invalid."));
 		return false;
 	}
 
+	if (IsInCapure)
+	{
+		UE_LOG(LogUnrealCV, Error, TEXT("UnrealcvWorldController::Capture : Other Capture Operation is running."));
+		return false;
+	}
+
+	IsInCapure = true;
+
+	Progress = 0.0f;
 	CaptureParamter = InCaptureParamter;
 	SetCaptureParamater(InCaptureParamter);
 
@@ -134,7 +146,7 @@ void AUnrealcvWorldController::SetCaptureParamater(const FCaptureParamer& InCapt
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
 	if (!IsValid(PlayerController))
 	{
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCaptureParamater : The APlayerController of the Pawn is invalid."));
+		UE_LOG(LogUnrealCV, Error, TEXT("UnrealcvWorldController::SetCaptureParamater : The APlayerController of the Pawn is invalid."));
 		return;
 	}
 
@@ -155,13 +167,14 @@ void AUnrealcvWorldController::StartCapture()
 	OldCameraOrientation.Location = Pawn->GetActorLocation();
 	OldCameraOrientation.Rotator = Pawn->GetActorRotation();
 
+	Progress = 0.0f;
 	CurCaptureIndex = 0;
 	SetCameraOrientationDelay();
 }
 
 void AUnrealcvWorldController::SetCameraOrientationDelay()
 {
-	UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::SetTransfromDelay, Index: %d"), CurCaptureIndex);
+	UE_LOG(LogUnrealCV, Log, TEXT("UnrealcvWorldController::SetCameraOrientationDelay, Index: %d"), CurCaptureIndex);
 
 	if (CurCaptureIndex < CaptureOrientations.Num())
 	{
@@ -183,6 +196,9 @@ void AUnrealcvWorldController::ScreenShotDelay()
 	//Continue Even if have wrong
 	ScreenShot(CaptureOrientations[CurCaptureIndex]);
 	CurCaptureIndex++;
+
+	Progress = (float)CurCaptureIndex / (float)CaptureOrientations.Num() - 0.001f;
+	Progress = FMath::Max(Progress, 0.0f);
 	GetWorldTimerManager().SetTimerForNextTick(this, &AUnrealcvWorldController::SetCameraOrientationDelay);
 }
 
@@ -192,6 +208,8 @@ void AUnrealcvWorldController::StopCapture()
 
 	//Restore Position
 	SetCameraOrientation(OldCameraOrientation);
+	Progress = 1.0f;
+	IsInCapure = false;
 }
 
 void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCaptureParamters, const TArray<FVector>& InPoints, TArray<FCaptureOrientation>& Orientations)
@@ -209,7 +227,7 @@ void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCap
 			for (int32 YawIndex = 0; YawIndex < YawNum; ++YawIndex)
 			{
 				float CurYawAngle = FMath::Min<float>(YawIndex * InCaptureParamters.YawAngleGap, 360.0f);
-				UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::Capture : Location - %s , CurPitctAngle - %f , CurYawAngle - %f "), *InPoints[PointIndex].ToCompactString(), CurPitctAngle, CurYawAngle);
+				UE_LOG(LogUnrealCV, Log, TEXT("UnrealcvWorldController::Capture : Location - %s , CurPitctAngle - %f , CurYawAngle - %f "), *InPoints[PointIndex].ToCompactString(), CurPitctAngle, CurYawAngle);
 
 				//TODO Roll Angle = 0
 				FRotator Rotator = FRotator(CurPitctAngle, CurYawAngle, 0);
@@ -228,19 +246,19 @@ void AUnrealcvWorldController::GenerateOrientations(const FCaptureParamer& InCap
 bool  AUnrealcvWorldController::SetCameraOrientation(const FCaptureOrientation& Orientation)
 {
 	APawn* Pawn = FUnrealcvServer::Get().GetPawn();
-	UE_LOG(LogUnrealCV, Log, TEXT("AUnrealcvWorldController::SetCameraOrientation : Location - %s , Rotator - %s"), *Orientation.Location.ToCompactString(), *Orientation.Rotator.ToCompactString());
+	UE_LOG(LogUnrealCV, Log, TEXT("UnrealcvWorldController::SetCameraOrientation : Location - %s , Rotator - %s"), *Orientation.Location.ToCompactString(), *Orientation.Rotator.ToCompactString());
 
 	bool IsSucess = Pawn->SetActorLocation(Orientation.Location, false, NULL, ETeleportType::TeleportPhysics);
 	if (!IsSucess)
 	{
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : SetActorLocation Method execute Error."));
+		UE_LOG(LogUnrealCV, Error, TEXT("UnrealcvWorldController::SetCameraOrientation : SetActorLocation Method execute Error."));
 		return false;
 	}
 
 	AController* Controller = Pawn->GetController();
 	if (!IsValid(Controller))
 	{
-		UE_LOG(LogUnrealCV, Error, TEXT("AUnrealcvWorldController::SetCameraOrientation : The Controller of the Pawn is invalid."));
+		UE_LOG(LogUnrealCV, Error, TEXT("UnrealcvWorldController::SetCameraOrientation : The Controller of the Pawn is invalid."));
 		return false;
 	}
 	Controller->ClientSetRotation(Orientation.Rotator); // Teleport action
@@ -261,12 +279,10 @@ bool  AUnrealcvWorldController::ScreenShot(const FCaptureOrientation& InOrientat
 
 	// ------------------------------------- HighResShot 指令 Development可用，Shipping下不可用
 	FString Cmd = "vrun HighResShot " + FString::FromInt(CaptureParamter.ImageWidth) + "x" + FString::FromInt(CaptureParamter.ImageHeight)  + " filename=" + SaveFilePath;
-	UE_LOG(LogUnrealCV, Warning, TEXT("AUnrealcvWorldController::HighResShot:  HighResShot Command is %s"), *Cmd);
+	UE_LOG(LogUnrealCV, Log, TEXT("UnrealcvWorldController::HighResShot:  HighResShot Command is %s"), *Cmd);
 	FExecStatus ExecStatus1 = FUnrealcvServer::Get().CommandDispatcher->Exec(Cmd);
-	UE_LOG(LogUnrealCV, Warning, TEXT("%s"), *ExecStatus1.GetMessage());
+	UE_LOG(LogUnrealCV, Log, TEXT("HighResShot Result : %s"), *ExecStatus1.GetMessage());
 
 	return true;
 }
-
-
 
